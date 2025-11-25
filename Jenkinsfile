@@ -19,7 +19,7 @@ pipeline {
         stage('Push Images') {
             steps {
                 sh """
-                echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin
+                echo wF^49tD/8eQm8mx | docker login -u yousifhamdy7 --password-stdin
                 docker push myapp-frontend
                 docker push myapp-backend
                 docker push myapp-database
