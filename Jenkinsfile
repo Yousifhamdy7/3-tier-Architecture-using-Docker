@@ -1,31 +1,35 @@
 pipeline {
     agent any
+
     environment {
-        DOCKER_HOST = 'unix:///var/run/docker.sock'
+        DOCKERHUB_USER = credentials('dockerhub-user')
+        DOCKERHUB_PASS = credentials('dockerhub-pass')
     }
+
     stages {
-        stage('Checkout') {
-            steps {
-                git 'git@github.com:<your-username>/3-tier-Architecture-using-Docker.git'
-            }
-        }
+
         stage('Build Docker Images') {
             steps {
-                sh 'docker build -t frontend:latest ./frontend'
-                sh 'docker build -t backend:latest ./backend'
-                sh 'docker build -t mysql:latest ./database'
+                sh 'docker build -t myapp-frontend ./frontend'
+                sh 'docker build -t myapp-backend ./backend'
+                sh 'docker build -t myapp-database ./database'
             }
         }
+
+        stage('Push Images') {
+            steps {
+                sh """
+                echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin
+                docker push myapp-frontend
+                docker push myapp-backend
+                docker push myapp-database
+                """
+            }
+        }
+
         stage('Deploy to KinD') {
             steps {
-                sh 'kubectl apply -f k8s/namespace.yaml'
-                sh 'kubectl apply -f k8s/mysql-deployment.yaml'
-                sh 'kubectl apply -f k8s/backend-deployment.yaml'
-                sh 'kubectl apply -f k8s/frontend-deployment.yaml'
-                sh 'kubectl apply -f k8s/mysql-service.yaml'
-                sh 'kubectl apply -f k8s/backend-service.yaml'
-                sh 'kubectl apply -f k8s/frontend-service.yaml'
-                sh 'kubectl apply -f k8s/ingress.yaml'
+                sh 'kubectl apply -f k8s/'
             }
         }
     }
