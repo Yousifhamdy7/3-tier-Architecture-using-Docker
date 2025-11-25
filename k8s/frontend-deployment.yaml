@@ -1,8 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend
-  namespace: devops-project
+  name: frontend-deployment
 spec:
   replicas: 1
   selector:
@@ -15,7 +14,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: frontend:latest
+        image: ghcr.io/yousifhamdy7/3-tier-architecture-using-docker/frontend:latest
         ports:
         - containerPort: 3000
 
