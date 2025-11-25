@@ -2,35 +2,62 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USER = credentials('dockerhub-user')
-        DOCKERHUB_PASS = credentials('dockerhub-pass')
+        REGISTRY = "ghcr.io"
+        REPO = "Yousifhamdy7/3-tier-Architecture-using-Docker"
+        IMAGE_TAG = "latest"
     }
 
     stages {
 
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Build Docker Images') {
             steps {
-                sh 'docker build -t myapp-frontend ./frontend'
-                sh 'docker build -t myapp-backend ./backend'
-                sh 'docker build -t myapp-database ./database'
+                sh '''
+                docker build -t $REGISTRY/$REPO/frontend:$IMAGE_TAG ./frontend
+                docker build -t $REGISTRY/$REPO/backend:$IMAGE_TAG ./backend
+                docker build -t $REGISTRY/$REPO/database:$IMAGE_TAG ./database
+                '''
             }
         }
 
-        stage('Push Images') {
+        stage('Login to GHCR') {
             steps {
-                sh """
-                echo wF^49tD/8eQm8mx | docker login -u yousifhamdy7 --password-stdin
-                docker push myapp-frontend
-                docker push myapp-backend
-                docker push myapp-database
-                """
+                withCredentials([usernamePassword(credentialsId: 'ghcr', usernameVariable: 'USER', passwordVariable: 'TOKEN')]) {
+                    sh 'echo $TOKEN | docker login ghcr.io -u $USER --password-stdin'
+                }
             }
         }
 
-        stage('Deploy to KinD') {
+        stage('Push Docker Images') {
             steps {
-                sh 'kubectl apply -f k8s/'
+                sh '''
+                docker push $REGISTRY/$REPO/frontend:$IMAGE_TAG
+                docker push $REGISTRY/$REPO/backend:$IMAGE_TAG
+                docker push $REGISTRY/$REPO/database:$IMAGE_TAG
+                '''
             }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KCFG')]) {
+                    sh '''
+                    export KUBECONFIG=$KCFG
+                    kubectl apply -f k8s/
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker logout ghcr.io'
         }
     }
 }
