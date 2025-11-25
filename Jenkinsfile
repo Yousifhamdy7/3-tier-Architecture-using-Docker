@@ -1,29 +1,24 @@
 pipeline {
     agent any
-
     environment {
-        FRONTEND_IMAGE = "ghcr.io/yousifhamdy7/3-tier-architecture-using-docker/frontend:latest"
-        BACKEND_IMAGE  = "ghcr.io/yousifhamdy7/3-tier-architecture-using-docker/backend:latest"
-        DATABASE_IMAGE = "ghcr.io/yousifhamdy7/3-tier-architecture-using-docker/database:latest"
+        // Docker registry
+        REGISTRY = 'ghcr.io/yousifhamdy7/3-tier-architecture-using-docker'
     }
-
     stages {
-
         stage('Checkout Code') {
             steps {
-                git(
-                    url: 'https://github.com/Yousifhamdy7/3-tier-Architecture-using-Docker',
-                    branch: 'main',
-                    credentialsId: 'github'
-                )
+                git url: 'https://github.com/Yousifhamdy7/3-tier-Architecture-using-Docker', branch: 'main', credentialsId: 'github'
             }
         }
 
         stage('Build Docker Images') {
             steps {
-                sh 'docker build -t $FRONTEND_IMAGE ./frontend'
-                sh 'docker build -t $BACKEND_IMAGE ./backend'
-                sh 'docker build -t $DATABASE_IMAGE ./database'
+                script {
+                    sh 'export DOCKER_BUILDKIT=1'
+                    sh 'docker build -t $REGISTRY/frontend:latest ./frontend'
+                    sh 'docker build -t $REGISTRY/backend:latest ./backend'
+                    sh 'docker build -t $REGISTRY/database:latest ./database'
+                }
             }
         }
 
@@ -37,9 +32,9 @@ pipeline {
 
         stage('Push Docker Images') {
             steps {
-                sh 'docker push $FRONTEND_IMAGE'
-                sh 'docker push $BACKEND_IMAGE'
-                sh 'docker push $DATABASE_IMAGE'
+                sh 'docker push $REGISTRY/frontend:latest'
+                sh 'docker push $REGISTRY/backend:latest'
+                sh 'docker push $REGISTRY/database:latest'
             }
         }
 
@@ -47,11 +42,9 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh '''
-                    kubectl apply -f k8s/
-                    kubectl rollout status deployment/frontend
-                    kubectl rollout status deployment/backend
-                    kubectl rollout status deployment/database
-                    kubectl get pods -o wide
+                        export KUBECONFIG=$KUBECONFIG
+                        kubectl get nodes
+                        kubectl apply -f k8s/
                     '''
                 }
             }
@@ -63,7 +56,7 @@ pipeline {
             sh 'docker logout ghcr.io'
         }
         success {
-            echo 'Deployment successful!'
+            echo 'Deployment succeeded!'
         }
         failure {
             echo 'Deployment failed!'
