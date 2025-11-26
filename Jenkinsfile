@@ -7,11 +7,6 @@ pipeline {
 
     stages {
 
-        stage('Checkout Code') {
-            steps {
-                git credentialsId: 'github', url: 'https://github.com/Yousifhamdy7/3-tier-Architecture-using-Docker'
-            }
-        }
 
         stage('Build Docker Images') {
             steps {
