@@ -3,87 +3,86 @@ pipeline {
 
     environment {
         REGISTRY = "ghcr.io/yousifhamdy7/3-tier-architecture-using-docker"
+        IMAGE_TAG = "latest"
     }
 
     stages {
 
-
-        stage('Build Docker Images') {
+        stage('Checkout') {
             steps {
-                script {
-                    sh "docker build -t ${REGISTRY}/frontend:latest ./frontend"
-                    sh "docker build -t ${REGISTRY}/backend:latest ./backend"
-                    sh "docker build -t ${REGISTRY}/database:latest ./database"
-                }
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/Yousifhamdy7/3-tier-Architecture-using-Docker',
+                        credentialsId: 'github'    // ✅ FIXES GIT AUTH ERROR
+                    ]]
+                ])
             }
         }
 
-        stage('Login to GHCR') {
+        stage('Docker Login') {
             steps {
-                withCredentials([string(credentialsId: 'GHCR_TOKEN', variable: 'TOKEN')]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'ghcr',        // ✅ FIX THIS IN JENKINS
+                    usernameVariable: 'USER',
+                    passwordVariable: 'TOKEN'
+                )]) {
                     sh """
-                        echo "${TOKEN}" | docker login ghcr.io -u yousifhamdy7 --password-stdin
+                        echo $TOKEN | docker login ghcr.io -u $USER --password-stdin
                     """
                 }
             }
         }
 
-        stage('Push Docker Images') {
+        stage('Build Images') {
             steps {
-                sh "docker push ${REGISTRY}/frontend:latest"
-                sh "docker push ${REGISTRY}/backend:latest"
-                sh "docker push ${REGISTRY}/database:latest"
+                sh "docker build -t ${REGISTRY}/frontend:${IMAGE_TAG} ./frontend"
+                sh "docker build -t ${REGISTRY}/backend:${IMAGE_TAG} ./backend"
+                sh "docker build -t ${REGISTRY}/database:${IMAGE_TAG} ./database"
             }
         }
 
-        stage('Extract Real Kubeconfig from Kind') {
+        stage('Push Images') {
             steps {
-                script {
-                    // Find the Kind control-plane container
-                    def controlPlane = sh(
-                        script: "docker ps --format '{{.Names}}' | grep 'kind-control-plane'",
-                        returnStdout: true
-                    ).trim()
+                sh "docker push ${REGISTRY}/frontend:${IMAGE_TAG}"
+                sh "docker push ${REGISTRY}/backend:${IMAGE_TAG}"
+                sh "docker push ${REGISTRY}/database:${IMAGE_TAG}"
+            }
+        }
 
-                    if (controlPlane == "") {
-                        error("No Kind cluster found. Create it using: kind create cluster")
-                    }
-
-                    // Copy kubeconfig out of Kind node
+        stage('Setup Kubeconfig') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KCFG')]) {
                     sh """
-                        docker cp ${controlPlane}:/etc/kubernetes/admin.conf ./kubeconfig
-                        sed -i 's/127.0.0.1/kind-control-plane/g' ./kubeconfig
+                        mkdir -p ~/.kube
+                        cp $KCFG ~/.kube/config
+                        chmod 600 ~/.kube/config
+                        echo 'Kubeconfig installed'
                     """
-
-                    // Set env variable for future kubectl commands
-                    env.KUBECONFIG = "${WORKSPACE}/kubeconfig"
                 }
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                script {
-                    sh """
-                        kubectl apply -f k8s/database.yaml
-                        kubectl apply -f k8s/backend.yaml
-                        kubectl apply -f k8s/frontend.yaml
-                        kubectl get pods -A
-                    """
-                }
+                sh """
+                    kubectl apply -f k8s/
+                    kubectl get pods -A
+                """
             }
         }
     }
 
     post {
         always {
-            sh 'docker logout ghcr.io'
-        }
-        failure {
-            echo "Deployment failed!"
+            sh 'docker logout ghcr.io || true'
         }
         success {
-            echo "Deployment successful!"
+            echo "🎉 Deployment successful!"
+        }
+        failure {
+            echo "❌ Deployment failed!"
         }
     }
 }
