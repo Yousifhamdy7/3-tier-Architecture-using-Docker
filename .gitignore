@@ -1,0 +1,36 @@
+# Node / npm
+node_modules/
+npm-debug.log
+package-lock.json
+
+
+# Python
+__pycache__/
+*.pyc
+
+
+# OS
+.DS_Store
+
+
+# Kubernetes / kind
+.kube/
+kubeconfig.yaml
+
+
+# secrets
+*.env
+secrets.yml
+
+
+# Docker
+*.tar
+
+
+# IDE
+.vscode/
+.idea/
+
+
+# logs
+*.log
